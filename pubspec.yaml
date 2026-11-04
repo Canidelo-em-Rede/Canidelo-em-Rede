@@ -65,9 +65,10 @@ flutter:
   # Garante que os ícones do Material Design estão disponíveis.
   uses-material-design: true
 
-  # Define as imagens utilizadas pela aplicação.
+    # Define as imagens utilizadas pela aplicação.
   assets:
     - assets/logo.png # Logótipo do Canidelo em Rede.
+    - assets/logo_junta.png # Logótipo da Junta de Freguesia.
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

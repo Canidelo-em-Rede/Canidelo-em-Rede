@@ -112,6 +112,7 @@ class HomePage extends StatelessWidget { // Define a página inicial.
     return Scaffold(
       
 
+
 appBar: AppBar(
   leading: IconButton(
     tooltip: 'Opções de acessibilidade',
@@ -125,12 +126,28 @@ appBar: AppBar(
       );
     },
   ),
-  title: const Text(
-    'Canidelo em Rede',
-    style: TextStyle(fontWeight: FontWeight.bold),
+  title: Image.asset(
+    'assets/logo_junta.png', // Carrega o logótipo da Junta.
+    height: 45, // Define a altura do logótipo.
+    fit: BoxFit.contain, // Mantém as proporções da imagem.
   ),
   centerTitle: true,
+  actions: [
+    IconButton(
+      tooltip: 'Perguntas frequentes',
+      icon: const Icon(Icons.help_outline, size: 28),
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (context) => const PerguntasFrequentesPage(),
+          ),
+        );
+      },
+    ),
+  ],
 ),
+
 
 
       body: Padding(
@@ -251,24 +268,38 @@ class _ReportPageState extends State<ReportPage> {
   Position? _position;
 bool _gettingLocation = false;
 
-  File? _image;
+  List<File> _images = []; // Guarda todas as fotografias selecionadas ou tiradas.
   String? _selectedProblem;
 
   final TextEditingController _descriptionController =
       TextEditingController();
 
   Future<void> _pickImage(ImageSource source) async {
+  if (source == ImageSource.gallery) {
+    final List<XFile> pickedFiles = await _picker.pickMultiImage(
+      imageQuality: 80,
+    );
+
+    if (pickedFiles.isNotEmpty && mounted) {
+      setState(() {
+        _images.addAll(
+          pickedFiles.map((file) => File(file.path)),
+        ); // Adiciona todas as fotografias selecionadas.
+      });
+    }
+  } else {
     final XFile? pickedFile = await _picker.pickImage(
       source: source,
       imageQuality: 80,
     );
 
-    if (pickedFile != null) {
+    if (pickedFile != null && mounted) {
       setState(() {
-        _image = File(pickedFile.path);
+        _images.add(File(pickedFile.path)); // Adiciona a nova fotografia.
       });
     }
   }
+}
   
   Future<void> _chooseLocationOnMap() async { // Abre o mapa e recebe a localização escolhida.
     final LatLng? localizacao = await Navigator.push<LatLng>( // Abre o mapa e espera pela seleção.
@@ -414,44 +445,93 @@ bool _gettingLocation = false;
 
             const SizedBox(height: 20),
 
-            GestureDetector(
-              onTap: _showPhotoOptions,
-              child: Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Colors.grey,
-                    width: 1.5,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: _image == null
-                    ? const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.camera_alt,
-                            size: 55,
-                            color: Colors.blue,
-                          ),
-                          SizedBox(height: 10),
-                          Text(
-                            'Adicionar fotografia',
-                            style: TextStyle(fontSize: 17),
-                          ),
-                        ],
-                      )
-                    : ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.file(
-                          _image!,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
+            Column(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    GestureDetector(
+      onTap: _showPhotoOptions,
+      child: Container(
+        height: 120,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: Colors.grey,
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.add_a_photo,
+              size: 40,
+              color: Colors.blue,
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Adicionar fotografias',
+              style: TextStyle(fontSize: 17),
+            ),
+          ],
+        ),
+      ),
+    ),
+    const SizedBox(height: 12),
+    Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: List.generate(_images.length, (index) {
+        return Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.file(
+                _images[index],
+                width: 105,
+                height: 105,
+                fit: BoxFit.cover,
               ),
             ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _images.removeAt(index); // Remove a fotografia selecionada.
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }),
+    ),
+    if (_images.isNotEmpty)
+      Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(
+          '${_images.length} fotografia(s) selecionada(s)',
+          style: const TextStyle(fontSize: 14),
+        ),
+      ),
+  ],
+),
 
-            const SizedBox(height: 20), // Cria espaço antes dos botões de localização.
+const SizedBox(height: 20), // Cria espaço antes dos botões de localização.
 
             Row( // Coloca os dois botões lado a lado.
               children: [
@@ -700,6 +780,8 @@ class MapPage extends StatefulWidget { // Cria a página do mapa.
 }
 
 class _MapPageState extends State<MapPage> {
+    String _estadoFiltro = 'Todas'; // Guarda o filtro de estado selecionado.
+  bool _modoMapaCalor = false; // Controla a visualização entre marcadores e mapa de calor.
   String _formatarData(DateTime data) { // Formata a data para o formato usado em Portugal.
   final dia = data.day.toString().padLeft(2, '0'); // Obtém o dia com dois algarismos.
   final mes = data.month.toString().padLeft(2, '0'); // Obtém o mês com dois algarismos.
@@ -730,8 +812,57 @@ class _MapPageState extends State<MapPage> {
           }
 
           final ocorrencias = snapshot.data?.docs ?? []; // Obtém as ocorrências.
+          final ocorrenciasFiltradas = ocorrencias.where((doc) {
+  final estado = doc.data()['estado'] ?? 'Pendente'; // Obtém o estado da ocorrência.
+  return _estadoFiltro == 'Todas' || estado == _estadoFiltro; // Mantém apenas as ocorrências do estado selecionado.
+}).toList();
 
-          return FlutterMap(
+          return Column(
+  children: [
+    Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              value: _estadoFiltro,
+              decoration: const InputDecoration(
+                labelText: 'Filtrar ocorrências',
+                prefixIcon: Icon(Icons.filter_list),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'Todas', child: Text('Todas')),
+                DropdownMenuItem(value: 'Pendente', child: Text('Pendente')),
+                DropdownMenuItem(value: 'Em análise', child: Text('Em análise')),
+                DropdownMenuItem(value: 'Resolvida', child: Text('Resolvida')),
+              ],
+              onChanged: (valor) {
+                if (valor == null) return;
+                setState(() {
+                  _estadoFiltro = valor; // Atualiza o filtro selecionado.
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton.filledTonal(
+            tooltip: _modoMapaCalor ? 'Ver marcadores' : 'Ver mapa de calor',
+            onPressed: () {
+              setState(() {
+                _modoMapaCalor = !_modoMapaCalor; // Alterna o modo de visualização.
+              });
+            },
+            icon: Icon(
+              _modoMapaCalor ? Icons.location_on : Icons.local_fire_department,
+            ),
+          ),
+        ],
+      ),
+    ),
+    Expanded(
+      child: FlutterMap(
             
 options: MapOptions(
   initialCenter: LatLng(
@@ -755,8 +886,34 @@ options: MapOptions(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', // Carrega o OpenStreetMap.
                 userAgentPackageName: 'com.example.gaia_alerta', // Identifica a aplicação.
               ),
+                            if (_modoMapaCalor == true)
+              CircleLayer(
+  circles: ocorrenciasFiltradas.map((doc) {
+    final dados = doc.data();
+    final latitude = dados['latitude'];
+    final longitude = dados['longitude'];
+
+    if (latitude == null || longitude == null) {
+      return null;
+    }
+
+    return CircleMarker(
+      point: LatLng(
+        (latitude as num).toDouble(),
+        (longitude as num).toDouble(),
+      ),
+      radius: 35,
+      useRadiusInMeter: true,
+      color: Colors.red.withValues(alpha: 0.25),
+      borderColor: Colors.red.withValues(alpha: 0.15),
+      borderStrokeWidth: 1,
+    );
+  }).whereType<CircleMarker>().toList(),
+),
+              
+                            if (_modoMapaCalor == false)
               MarkerLayer(
-  markers: ocorrencias.map((doc) { // Cria um marcador para cada ocorrência do Firestore.
+  markers: ocorrenciasFiltradas.map((doc) { // Cria um marcador para cada ocorrência do Firestore.
     final dados = doc.data(); // Obtém os dados da ocorrência.
     final latitude = dados['latitude']; // Obtém a latitude.
     final longitude = dados['longitude']; // Obtém a longitude.
@@ -847,8 +1004,11 @@ Text(
 );
   }).whereType<Marker>().toList(), // Remove os valores nulos e cria a lista final de marcadores.
 ),
-            ],
-          );
+                        ],
+          ),
+        ),
+      ],
+    );
         },
       ),
     );
@@ -1129,6 +1289,186 @@ const SizedBox(height: 16), // Adiciona espaço antes da opção seguinte.
                 ],
               );
             },
+          ),
+        ],
+      ),
+    );
+  }
+}
+class PerguntasFrequentesPage extends StatefulWidget {
+  const PerguntasFrequentesPage({super.key});
+
+  @override
+  State<PerguntasFrequentesPage> createState() =>
+      _PerguntasFrequentesPageState();
+}
+
+class _PerguntasFrequentesPageState extends State<PerguntasFrequentesPage> {
+  int? _perguntaAberta;
+
+  final List<Map<String, String>> _perguntas = [
+    {
+      'pergunta': 'Que situações posso comunicar?',
+      'resposta':
+          'Pode comunicar situações relacionadas com o espaço público, limpeza e salubridade, jardins e espaços verdes, iluminação, ambiente, segurança e acessibilidade. Se não tiver a certeza de que a situação é da competência da Junta, contacte os serviços para obter orientação.',
+    },
+    {
+      'pergunta': 'Como posso comunicar uma ocorrência?',
+      'resposta':
+          'Na página inicial, selecione "Comunicar uma ocorrência". Escolha o tipo de problema, indique a localização através do GPS ou selecionando-a no mapa e, se desejar, adicione fotografias e uma descrição. Por fim, carregue em "Enviar ocorrência".',
+    },
+    {
+      'pergunta': 'Sou obrigado a adicionar fotografias?',
+      'resposta':
+          'Não. As fotografias são opcionais. No entanto, ajudam a administração a compreender melhor a situação comunicada.',
+    },
+    {
+      'pergunta': 'Como funcionam as notificações por email?',
+      'resposta':
+          'Esta funcionalidade ainda não está disponível. No futuro, poderá indicar o seu email para receber uma confirmação da receção da ocorrência e atualizações sobre o seu estado.',
+    },
+    {
+      'pergunta': 'Que serviços e apoios disponibiliza a Junta?',
+      'resposta':
+          'A Junta de Freguesia disponibiliza vários serviços e apoios à população. Para consultar informação atualizada sobre os serviços disponíveis, visite o site oficial da Junta: https://jfcanidelo.pt/',
+    },
+    {
+      'pergunta': 'Como posso contactar a Junta de Freguesia?',
+      'resposta':
+          'Pode encontrar o telefone, o email e a morada da Junta na secção de contactos, no final desta página.',
+    },
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Perguntas Frequentes'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text(
+            'Precisa de ajuda?',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Consulte as perguntas frequentes para encontrar respostas às suas dúvidas sobre a aplicação.',
+            style: TextStyle(fontSize: 16),
+          ),
+          const SizedBox(height: 20),
+
+          ...List.generate(_perguntas.length, (index) {
+            final pergunta = _perguntas[index];
+            final aberta = _perguntaAberta == index;
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              child: Column(
+                children: [
+                  ListTile(
+                    title: Text(
+                      pergunta['pergunta']!,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                    ),
+                    trailing: Icon(
+                      aberta
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                    ),
+                    onTap: () {
+                      setState(() {
+                        _perguntaAberta = aberta ? null : index;
+                      });
+                    },
+                  ),
+                  if (aberta)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          pergunta['resposta']!,
+                          style: const TextStyle(fontSize: 15),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          }),
+
+          const SizedBox(height: 20),
+
+          const Text(
+            'Contactos da Junta de Freguesia',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.phone, size: 22),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          '22 771 8230',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Row(
+                    children: [
+                      Icon(Icons.email, size: 22),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'geral@jfcanidelo.pt',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.location_on, size: 22),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'R. António Ferreira Braga Júnior, 303\n4400-364 Vila Nova de Gaia',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Site oficial: https://jfcanidelo.pt/',
+                    style: TextStyle(fontSize: 15),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
