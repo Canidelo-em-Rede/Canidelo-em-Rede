@@ -140,11 +140,11 @@ appBar: AppBar(
           children: [
             const SizedBox(height: 40), // Cria espaço superior.
 
-            const Icon(
-              Icons.location_city, // Mostra o ícone da freguesia.
-              size: 90, // Define o tamanho do ícone.
-              color: Color(0xFFC62828), // Aplica o vermelho da aplicação.
-            ),
+            Image.asset(
+  'assets/logo.png',
+  height: 130,
+  fit: BoxFit.contain,
+),
 
             const SizedBox(height: 25), // Separa o ícone do título.
 
@@ -181,7 +181,7 @@ appBar: AppBar(
               },
               icon: const Icon(Icons.report_problem), // Mostra o ícone de denúncia.
               label: const Text(
-                'Comunicar um problema', // Identifica o botão.
+                'Comunicar uma ocorrência', // Identifica o botão.
                 style: TextStyle(fontSize: 18), // Define o tamanho do texto.
               ),
               style: ElevatedButton.styleFrom(
@@ -541,13 +541,13 @@ if (_position != null) ...[
             const SizedBox(height: 20),
 
             TextField(
-              controller: _descriptionController,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'Descreve o problema...',
-              ),
-            ),
+  controller: _descriptionController, // Guarda o texto escrito pelo utilizador.
+  maxLines: 4, // Permite escrever uma descrição em várias linhas.
+  decoration: const InputDecoration(
+    border: OutlineInputBorder(), // Define a moldura do campo.
+    hintText: 'Descrição (opcional)', // Identifica a descrição como opcional.
+  ),
+),
 
             const SizedBox(height: 25),
 
@@ -562,14 +562,6 @@ if (_position != null) ...[
     return;
   }
 
-  if (_descriptionController.text.trim().isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Escreve uma descrição.'),
-      ),
-    );
-    return;
-  }
 
   // Verifica se a localização foi adicionada.
 if (_position == null) {
@@ -581,27 +573,85 @@ if (_position == null) {
   return;
 }
 
-// Guarda a ocorrência no Firestore.
+
+ // Verifica se existe uma ocorrência semelhante num raio de 50 metros.
 try {
+  final ocorrencias = await FirebaseFirestore.instance
+      .collection('ocorrencias')
+      .get();
+
+  if (!mounted) return;
+
+  Map<String, dynamic>? duplicada;
+  double distanciaDuplicada = 0;
+
+  for (final doc in ocorrencias.docs) {
+    final dados = doc.data();
+
+    if (dados['tipo'] != _selectedProblem) continue;
+    if (dados['estado'] == 'Resolvida') continue;
+
+    if (dados['latitude'] is! num ||
+        dados['longitude'] is! num) {
+      continue;
+    }
+
+    final distancia = Geolocator.distanceBetween(
+      _position!.latitude,
+      _position!.longitude,
+      (dados['latitude'] as num).toDouble(),
+      (dados['longitude'] as num).toDouble(),
+    );
+
+    if (distancia <= 50) {
+      duplicada = dados;
+      distanciaDuplicada = distancia;
+      break;
+    }
+  }
+
+  if (duplicada != null) {
+    final dadosDuplicados = duplicada!;
+
+    final continuar = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Possível ocorrência duplicada'),
+        content: Text(
+          'Já existe uma ocorrência do tipo "$_selectedProblem" '
+          'a ${distanciaDuplicada.toStringAsFixed(0)} metros.\n\n'
+          'Descrição: ${dadosDuplicados['descricao']}\n'
+          'Estado: ${dadosDuplicados['estado']}\n\n'
+          'Queres enviar a tua ocorrência na mesma?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(false),
+            child: const Text('Voltar'),
+          ),
+          ElevatedButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(true),
+            child: const Text('Enviar na mesma'),
+          ),
+        ],
+      ),
+    );
+
+    if (continuar != true) return;
+  }
+
+  // Guarda a ocorrência no Firestore.
   await FirebaseFirestore.instance.collection('ocorrencias').add({
-    
-    'tipo': _selectedProblem,// Guarda o tipo de problema selecionado.
-
-    'descricao': _descriptionController.text.trim(),    // Guarda a descrição escrita pelo utilizador.
-
-
-   
-    'latitude': _position!.latitude, // Guarda a latitude da localização.
-
-    
-    'longitude': _position!.longitude,// Guarda a longitude da localização.
-
-    
-    'data': FieldValue.serverTimestamp(),// Guarda a data e hora em que a ocorrência foi enviada.
-    'estado': 'Pendente', // Define o estado inicial da ocorrência.
+    'tipo': _selectedProblem,
+    'descricao': _descriptionController.text.trim(),
+    'latitude': _position!.latitude,
+    'longitude': _position!.longitude,
+    'data': FieldValue.serverTimestamp(),
+    'estado': 'Pendente',
   });
 
-  // Mostra uma mensagem quando a ocorrência foi guardada.
   if (!mounted) return;
 
   ScaffoldMessenger.of(context).showSnackBar(
@@ -610,16 +660,16 @@ try {
     ),
   );
 } catch (e) {
-  // Mostra uma mensagem caso aconteça algum erro.
   if (!mounted) return;
 
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
-      content: Text('Erro ao enviar ocorrência: $e'),
+      content: Text('Erro ao verificar ou enviar ocorrência: $e'),
     ),
   );
 }
 },
+
               icon: const Icon(Icons.send),
               label: const Text(
                 'Enviar ocorrência',
