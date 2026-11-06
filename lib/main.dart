@@ -9,7 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart'; // Permite guardar fotografias no Firebase Storage.
 import 'package:flutter_map/flutter_map.dart'; // Permite criar o mapa com OpenStreetMap.
 import 'package:latlong2/latlong.dart'; // Permite trabalhar com coordenadas de latitude e longitude.
-import 'mapa_selecao_page.dart'; // Permite abrir o mapa de seleção.
+import 'mapa_selecao_page.dart'; // Permite abri o mapa de seleção.
 
 final ValueNotifier<double> escalaTextoAcessibilidade = ValueNotifier<double>(1.0);
 final ValueNotifier<bool> altoContrasteAcessibilidade = ValueNotifier<bool>(false); // Controla a ativação do alto contraste.
